@@ -60,13 +60,16 @@ SPECIAL_NODES = frozenset((
 def load_file() -> dict[str, list[str]]:
     with open('lines.txt') as f:
         next(f)  # Skip header
-        results = {}
+        results: dict[str, list[str]] = {}
         for line in f:
             m = re.match(r'^[^\[]*', line)
             assert m
             key = m.group(0).strip()
             values = [m.group(0)[1:-1] for m in re.finditer(r'\[[^\]]*\]', line)]
-            results[key] = values
+            if key in results:
+                results[key] += values
+            else:
+                results[key] = values
         return results
 
 
@@ -116,7 +119,7 @@ def dijkstra(graph: nx.Graph[str], src: str) -> dict[str, list[PathNode]]:
 
     while not frontier.empty():
         _, curr = frontier.get()
-        if curr in SPECIAL_NODES:
+        if curr in SPECIAL_NODES and curr != src:
             # We can't use the special nodes as midpoints in our
             # paths, because they have side effects. They can (and
             # will) be the endpoint but they can't be the midpoint.
@@ -135,6 +138,8 @@ def all_dijkstra(graph: nx.Graph[str]) -> dict[str, dict[str, list[PathNode]]]:
     results = {}
     for src in graph.nodes():
         results[src] = dijkstra(graph, src)
+        line_in_src: str = next(iter(graph.edges(src, data='line')))[2]
+        results[src][src] = [PathNode(line=line_in_src, node=src)]
     return results
 
 
@@ -150,10 +155,8 @@ print(graph)
 print(nx.diameter(graph))
 
 paths = all_dijkstra(graph)
-print(paths['Barkingside']['Woodside Park'])
-
 with open('allpaths.json', 'w') as f:
     json.dump(paths, f, default=custom_json)
 
-nx.draw(graph)
-plt.show()
+#nx.draw(graph)
+#plt.show()
