@@ -16,6 +16,7 @@ import itertools
 import matplotlib.pyplot as plt
 from dataclasses import dataclass
 from queue import PriorityQueue
+import json
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -115,6 +116,11 @@ def dijkstra(graph: nx.Graph[str], src: str) -> dict[str, list[PathNode]]:
 
     while not frontier.empty():
         _, curr = frontier.get()
+        if curr in SPECIAL_NODES:
+            # We can't use the special nodes as midpoints in our
+            # paths, because they have side effects. They can (and
+            # will) be the endpoint but they can't be the midpoint.
+            continue
         line: str
         for _, dest, line in graph.edges(curr, data='line'):
             if dest not in results or len(results[dest]) > len(results[curr]) + 1:
@@ -125,12 +131,17 @@ def dijkstra(graph: nx.Graph[str], src: str) -> dict[str, list[PathNode]]:
     return results
 
 
-def all_dijkstra(graph: nx.Graph[str]) -> dict[tuple[str, str], list[PathNode]]:
+def all_dijkstra(graph: nx.Graph[str]) -> dict[str, dict[str, list[PathNode]]]:
     results = {}
     for src in graph.nodes():
-        for dest, path in dijkstra(graph, src).items():
-            results[(src, dest)] = path
+        results[src] = dijkstra(graph, src)
     return results
+
+
+def custom_json(obj: object):
+    if isinstance(obj, PathNode):
+        return {'line': obj.line, 'node': obj.node}
+    raise TypeError(f"Cannot serialize object of type {type(obj)}")
 
 
 mapping = load_file()
@@ -139,7 +150,10 @@ print(graph)
 print(nx.diameter(graph))
 
 paths = all_dijkstra(graph)
-print(paths[('Barkingside', 'Woodside Park')])
+print(paths['Barkingside']['Woodside Park'])
+
+with open('allpaths.json', 'w') as f:
+    json.dump(paths, f, default=custom_json)
 
 nx.draw(graph)
 plt.show()
