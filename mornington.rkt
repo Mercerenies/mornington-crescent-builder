@@ -82,17 +82,6 @@
 ;; while at rest. Exceptions to this are: Bank/Hammersmith (whose
 ;; values are always considered volatile).
 ;;
-;; The following registers are reserved to contain constants or other
-;; reserved purposes, for our convenience:
-;;
-;; * North Harrow - -1
-;;
-;; * Oval - 0
-;;
-;; * Queen's Park - 1
-;;
-;; * Tufnell Park - 10
-;;
 ;; * Rickmansworth - Stores a string at all times, can be used to
 ;; reset the accumulator to a safe string value.
 ;;
@@ -102,8 +91,34 @@
 (define <zero> '|Oval|)
 (define <one> '|Queen's Park|)
 (define <ten> '|Tufnell Park|)
-(define <string> '|Rickmansworth|)
+(define <hundred> '|West Hampstead|)
+(define <ten-thousand> '|Tower Hill|)
+(define <million> '|Mill Hill East|)
+(define <hundred-million> '|Hampstead|)
+(define <ten-billion> '|Belsize Park|)
+(define <trillion> '|Turnham Green|)
+(define <hundred-trillion> '|Turnpike Lane|)
+(define <ten-quadrillion> '|Queensbury|)
+(define <quintillion> '|Queensway|)
+
+(define <string> '|Rickmansworth|) ; Always a string
 (define <tmp> '|Tooting Bec|) ; Used for misc temporary purposes
+
+;; General purpose variables
+(define <a> '|Arsenal|)
+(define <b> '|Becontree|)
+(define <c> '|Chesham|)
+(define <d> '|Debden|)
+(define <e> '|Edgware|)
+(define <f> '|Fairlop|)
+(define <g> '|Greenford|)
+(define <h> '|Hainault|)
+(define <i> '|Ickenham|)
+(define <j> '|Kenton|)
+(define <value> '|Victoria|)
+(define <left-cmp> '|Leyton|)
+(define <right-cmp> '|Roding Valley|)
+(define <final-value> '|Finchley Central|)
 
 ;; Does not clobber register, but does clobber Bank/Hammersmith.
 (define (prim-load-without-clobbering register)
@@ -139,7 +154,8 @@
         (op-hammersmith)
         (goto src)))
 
-;; (dest is at station, src is at accumulator) when the math is performed.
+;; (dest is at station, src is at accumulator) when the math is
+;; performed. Do NOT call this with dest == src!
 (define (binary-operation op dest src)
   (code (goto dest)
         (op)
@@ -164,6 +180,12 @@
 (define (max= dest src)
   (binary-operation op-max dest src))
 
+;; Clobbers tmp
+(define (-= dest src)
+  (mov <tmp> src)
+  (*= <tmp> <negative-one>)
+  (+= dest <tmp>))
+
 (define (prim-bitnot)
   ;; Visit twice so we negate the accumulator, leaving the value at
   ;; Notting Hill Gate unchanged.
@@ -182,7 +204,8 @@
   (code (prim-loop-start)
         body ...
         (continue-if register)
-        (op-popstmt)))
+        (op-popstmt)
+        (prim-reset-to-string)))
 
 (define (decrement register)
   (+= register <negative-one>))
@@ -198,6 +221,16 @@
         (do-while register
          (decrement register)
          body ...)))
+
+(define (small-numeral register value)
+  (case value
+    [(0) (mov register <zero>)]
+    [(1) (mov register <one>)]
+    [(2 3 4 5 6) (begin (store-seven register) (for ([i (in-range 0 (- 7 value))]) (decrement register)))]
+    [(7) (store-seven register)]
+    [(8 9) (begin (store-seven register) (for ([i (in-range 0 (- value 7))]) (increment register)))]
+    [(10) (mov register <ten>)]
+    [else (error "Invalid small numeral value: " value)]))
 
 ;; Initialize constants
 (define (prologue)
@@ -217,11 +250,63 @@
    (store-seven <ten>)
    (increment <ten>)
    (increment <ten>)
-   (increment <ten>)))
+   (increment <ten>)
+   ;; Hundred
+   (mov <hundred> <ten>)
+   (*= <hundred> <ten>)
+   ;; Ten Thousand
+   (mov <ten-thousand> <hundred>)
+   (*= <ten-thousand> <hundred>)
+   ;; Million
+   (mov <million> <ten-thousand>)
+   (*= <million> <hundred>)
+   ;; Hundred Million
+   (mov <hundred-million> <million>)
+   (*= <hundred-million> <hundred>)
+   ;; Ten Billion
+   (mov <ten-billion> <hundred-million>)
+   (*= <ten-billion> <hundred>)
+   ;; Trillion
+   (mov <trillion> <ten-billion>)
+   (*= <trillion> <hundred>)
+   ;; Hundred Trillion
+   (mov <hundred-trillion> <trillion>)
+   (*= <hundred-trillion> <hundred>)
+   ;; Ten Quadrillion
+   (mov <ten-quadrillion> <hundred-trillion>)
+   (*= <ten-quadrillion> <hundred>)
+   ;; Quintillion
+   (mov <quintillion> <ten-quadrillion>)
+   (*= <quintillion> <hundred>)))
+
+(define (assemble-digital-value dest . registers)
+  (mov dest (first registers))
+  (for ([reg (rest registers)])
+    (*= dest <ten>)
+    (+= dest reg)))
+
+;; We have to pass loop-var here too because we can't run any continue
+;; statements if the current loop var is zero (the final loop
+;; iteration). continue statements jump to the top of the loop, unlike
+;; in most langs where they jump to the bottom, so in Mornington
+;; Crescent these would be some nasty infinite loops.
+(define (test-digit loop-var denom expected)
+  (mov <left-cmp> <value>)
+  (*= <left-cmp> <value>)
+  (/= <left-cmp> denom)
+  (%= <left-cmp> <ten>)
+  (small-numeral <right-cmp> expected)
+  (-= <left-cmp> <right-cmp>)
+  (*= <left-cmp> loop-var)
+  (continue-if <left-cmp>))
 
 (code
  (prologue)
- (mov '|West Ham| <zero>)
- (loop<9..0> '|St. James's Park|
-  (+= '|West Ham| '|St. James's Park|))
- (output-and-exit '|West Ham|))
+ (loop<9..0> <j>
+   (assemble-digital-value <value> <j>)
+   (test-digit <j> <one> 0)
+   (loop<9..0> <i>
+     (loop<9..0> <h>
+       (assemble-digital-value <value> <h> <i> <j>)
+       (test-digit <h> <hundred> 9)
+       (output-and-exit <value>)))))
