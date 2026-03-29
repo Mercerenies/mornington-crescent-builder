@@ -116,6 +116,7 @@
 (define <i> '|Ickenham|)
 (define <j> '|Kenton|)
 (define <value> '|Victoria|)
+(define <value^2> '|Vauxhall|)
 (define <left-cmp> '|Leyton|)
 (define <right-cmp> '|Roding Valley|)
 (define <final-value> '|Finchley Central|)
@@ -198,7 +199,8 @@
 
 (define (continue-if register)
   (code (prim-load-without-clobbering register)
-        (op-ifstmt)))
+        (op-ifstmt)
+        (prim-reset-to-string)))
 
 (define-syntax-rule (do-while register body ...)
   (code (prim-loop-start)
@@ -285,28 +287,48 @@
     (*= dest <ten>)
     (+= dest reg)))
 
-;; We have to pass loop-var here too because we can't run any continue
-;; statements if the current loop var is zero (the final loop
-;; iteration). continue statements jump to the top of the loop, unlike
-;; in most langs where they jump to the bottom, so in Mornington
-;; Crescent these would be some nasty infinite loops.
-(define (test-digit loop-var denom expected)
-  (mov <left-cmp> <value>)
-  (*= <left-cmp> <value>)
+(define (test-digit denom expected)
+  (mov <left-cmp> <value^2>)
   (/= <left-cmp> denom)
   (%= <left-cmp> <ten>)
-  (small-numeral <right-cmp> expected)
-  (-= <left-cmp> <right-cmp>)
-  (*= <left-cmp> loop-var)
+  (-= <left-cmp> expected)
   (continue-if <left-cmp>))
 
 (code
  (prologue)
- (loop<9..0> <j>
-   (assemble-digital-value <value> <j>)
-   (test-digit <j> <one> 0)
-   (loop<9..0> <i>
-     (loop<9..0> <h>
-       (assemble-digital-value <value> <h> <i> <j>)
-       (test-digit <h> <hundred> 9)
-       (output-and-exit <value>)))))
+ (mov <value> <hundred-million>)
+ (mov <tmp> <value>)
+ (+= <value> <tmp>) ; value = 200,000,000
+ (mov <a> <hundred-million>)
+ (/= <a> <ten>) ; a = 10,000,000
+ (-= <value> <a>)
+ (-= <value> <a>)
+ (-= <value> <a>)
+ (-= <value> <a>)
+ (-= <value> <a>)
+ (-= <value> <a>) ; value = 140,000,000
+
+ ;; Precompute small numerals
+ (small-numeral <b> 2)
+ (small-numeral <c> 3)
+ (small-numeral <d> 4)
+ (small-numeral <e> 5)
+ (small-numeral <f> 6)
+ (small-numeral <g> 7)
+ (small-numeral <h> 8)
+ (small-numeral <i> 9)
+
+ (increment <value>)
+ (do-while <value>
+   (decrement <value>)
+   (decrement <value>) ; We start on an odd number and we know the answer is odd (see reasoning in underload-gen.rkt)
+   (mov <value^2> <value>)
+   (*= <value^2> <value>)
+   (test-digit <one> <i>) ; 9
+   (test-digit <hundred> <h>) ; 8
+   (test-digit <ten-thousand> <g>) ; 7
+   (test-digit <million> <f>) ; 6
+   (test-digit <hundred-million> <e>) ; 5
+;   (test-digit <ten-billion> 4)
+   (*= <value> <ten>)
+   (output-and-exit <value>)))
