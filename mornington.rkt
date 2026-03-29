@@ -82,14 +82,40 @@
 ;; while at rest. Exceptions to this are: Bank/Hammersmith (whose
 ;; values are always considered volatile).
 ;;
-;; The following registers are reserved to contain constants, for our
-;; convenience:
+;; The following registers are reserved to contain constants or other
+;; reserved purposes, for our convenience:
+;;
+;; * North Harrow - -1
+;;
+;; * Oval - 0
 ;;
 ;; * Queen's Park - 1
 ;;
+;; * Tufnell Park - 10
+;;
+;; * Rickmansworth - Stores a string at all times, can be used to
+;; reset the accumulator to a safe string value.
+;;
 ;; These constants are initialized by the prologue.
 
+(define <negative-one> '|North Harrow|)
+(define <zero> '|Oval|)
 (define <one> '|Queen's Park|)
+(define <ten> '|Tufnell Park|)
+(define <string> '|Rickmansworth|)
+(define <tmp> '|Tooting Bec|) ; Used for misc temporary purposes
+
+;; Does not clobber register, but does clobber Bank/Hammersmith.
+(define (prim-load-without-clobbering register)
+  (code (goto register)
+        (op-bank)
+        (op-hammersmith)
+        (goto register)
+        (op-hammersmith)))
+
+;; Sets accumulator to a string value. Clobbers Bank/Hammersmith.
+(define (prim-reset-to-string)
+  (prim-load-without-clobbering <string>))
 
 (define (output-and-exit register)
   (code (goto register)
@@ -105,7 +131,7 @@
         (goto b)
         (goto a)))
 
-(define (dest=src dest src)
+(define (mov dest src)
   (code (goto src)
         (op-bank)
         (op-hammersmith)
@@ -113,7 +139,7 @@
         (op-hammersmith)
         (goto src)))
 
-;; (dest is at station, src is at accumulator) when the math is done.
+;; (dest is at station, src is at accumulator) when the math is performed.
 (define (binary-operation op dest src)
   (code (goto dest)
         (op)
@@ -123,18 +149,79 @@
         (op)
         (goto src)))
 
-(define (dest+=src dest src)
+(define (+= dest src)
   (binary-operation op-add dest src))
 
-(define (dest*=src dest src)
+(define (*= dest src)
   (binary-operation op-mul dest src))
 
-(define (dest=src/dest dest src)
+(define (/= dest src)
   (binary-operation op-div dest src))
 
+(define (%= dest src)
+  (binary-operation op-mod dest src))
+
+(define (max= dest src)
+  (binary-operation op-max dest src))
+
+(define (prim-bitnot)
+  ;; Visit twice so we negate the accumulator, leaving the value at
+  ;; Notting Hill Gate unchanged.
+  (code (op-bitnot)
+        (op-bitnot)))
+
+(define (prim-loop-start)
+  (code (op-continuation)
+        (prim-reset-to-string)))
+
+(define (continue-if register)
+  (code (prim-load-without-clobbering register)
+        (op-ifstmt)))
+
+(define-syntax-rule (do-while register body ...)
+  (code (prim-loop-start)
+        body ...
+        (continue-if register)
+        (op-popstmt)))
+
+(define (decrement register)
+  (+= register <negative-one>))
+
+(define (increment register)
+  (+= register <one>))
+
+;; Loop for the register from 9 to 0 inclusive. Do not mutate the
+;; register's value inside the loop body. (continue-if ...) inside the
+;; body is permitted.
+(define-syntax-rule (loop<9..0> register body ...)
+  (code (mov register <ten>)
+        (do-while register
+         (decrement register)
+         body ...)))
+
+;; Initialize constants
+(define (prologue)
+  (code
+   (store-seven <tmp>)
+   ;; One
+   (store-seven <one>)
+   (/= <one> <tmp>)
+   ;; Zero
+   (store-seven <zero>)
+   (%= <zero> <tmp>)
+   ;; Negative one
+   (prim-load-without-clobbering <zero>)
+   (prim-bitnot)
+   (goto <negative-one>)
+   ;; Ten
+   (store-seven <ten>)
+   (increment <ten>)
+   (increment <ten>)
+   (increment <ten>)))
+
 (code
- (store-seven '|Bow Road|)
- (dest=src '|Willesden Junction| '|Bow Road|)
- (dest+=src '|Willesden Junction| '|Bow Road|)
-; (dest=src/dest '|Willesden Junction| '|Bow Road|)
- (output-and-exit '|Willesden Junction|))
+ (prologue)
+ (mov '|West Ham| <zero>)
+ (loop<9..0> '|St. James's Park|
+  (+= '|West Ham| '|St. James's Park|))
+ (output-and-exit '|West Ham|))
