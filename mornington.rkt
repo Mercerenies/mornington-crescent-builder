@@ -318,7 +318,25 @@
  (small-numeral <h> 8)
  (small-numeral <i> 9)
 
- (increment <value>)
+ ;; Build our upper bound of 138924439.
+ (mov <value> <one>) ; 1
+ (*= <value> <ten>)
+ (+= <value> <c>) ; 3
+ (*= <value> <ten>)
+ (+= <value> <h>) ; 8
+ (*= <value> <ten>)
+ (+= <value> <i>) ; 9
+ (*= <value> <ten>)
+ (+= <value> <b>) ; 2
+ (*= <value> <ten>)
+ (+= <value> <d>) ; 4
+ (*= <value> <ten>)
+ (+= <value> <d>) ; 4
+ (*= <value> <ten>)
+ (+= <value> <c>) ; 3
+ (*= <value> <ten>)
+ (+= <value> <i>) ; 9
+
  (do-while <value>
    (decrement <value>)
    (decrement <value>) ; We start on an odd number and we know the answer is odd (see reasoning in underload-gen.rkt)
@@ -329,6 +347,8 @@
    (test-digit <ten-thousand> <g>) ; 7
    (test-digit <million> <f>) ; 6
    (test-digit <hundred-million> <e>) ; 5
-;   (test-digit <ten-billion> 4)
+   (test-digit <ten-billion> <d>) ; 4
+   (test-digit <trillion> <c>) ; 3
+   (test-digit <hundred-trillion> <b>) ; 2
    (*= <value> <ten>)
    (output-and-exit <value>)))
